@@ -11,3 +11,5 @@ api/models/*.pth
 api/models/sam/*.pth
 api/models/*.pkl
 api/models/training_results.json
+api/data/brats_deploy/
+api/brats_20_cases.tar.gz

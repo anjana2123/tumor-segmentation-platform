@@ -67,7 +67,33 @@ MODELS = {
     }
 }
 
-if __name__ == "__main__":
+# Dataset download
+DATASET_TAR = Path(__file__).parent / "brats_20_cases.tar.gz"
+DATASET_DIR = Path(__file__).parent / "data" / "brats_deploy"
+
+def download_and_extract_dataset():
+    """Download and extract BraTS dataset."""
+    if DATASET_DIR.exists() and any(DATASET_DIR.iterdir()):
+        print(f"Dataset already exists ({len(list(DATASET_DIR.rglob('*')))} files)")
+        return True
+    
+    # Download tar.gz
+    if not DATASET_TAR.exists():
+        print("Downloading BraTS dataset sample (165 MB)...")
+        download_from_gdrive('1Cf8IMYoe9Ps0zHU2_HhnIu_IlVt07HZ7', DATASET_TAR)
+    
+    # Extract
+    print(f"Extracting dataset to {DATASET_DIR}...")
+    import tarfile
+    with tarfile.open(DATASET_TAR, 'r:gz') as tar:
+        tar.extractall(Path(__file__).parent)
+    
+    # Remove tar file to save space
+    DATASET_TAR.unlink()
+    print("Dataset ready!")
+    return True
+
+'''if __name__ == "__main__":
     print("DOWNLOADING MODELS FROM GOOGLE DRIVE")
     
     start_time = time.time()
@@ -77,6 +103,27 @@ if __name__ == "__main__":
             download_from_gdrive(info['file_id'], info['destination'])
         except Exception as e:
             print(f"Error downloading {name}: {e}")
+    
+    elapsed = time.time() - start_time
+    print(f"Complete! Total time: {elapsed:.1f} seconds")'''
+
+if __name__ == "__main__":
+    print("DOWNLOADING MODELS AND DATASET FROM GOOGLE DRIVE")
+    
+    start_time = time.time()
+    
+    # Download models
+    for name, info in MODELS.items():
+        try:
+            download_from_gdrive(info['file_id'], info['destination'])
+        except Exception as e:
+            print(f"Error downloading {name}: {e}")
+    
+    # Download and extract dataset
+    try:
+        download_and_extract_dataset()
+    except Exception as e:
+        print(f"Error with dataset: {e}")
     
     elapsed = time.time() - start_time
     print(f"Complete! Total time: {elapsed:.1f} seconds")
