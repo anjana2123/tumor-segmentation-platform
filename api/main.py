@@ -9,6 +9,25 @@ import base64
 import time
 from pathlib import Path
 
+# Auto-download models on startup
+import subprocess
+import sys
+
+MODELS_DIR = Path(__file__).parent / "models"
+SAM_MODEL = MODELS_DIR / "sam" / "sam_vit_b.pth"
+
+if not SAM_MODEL.exists():
+    print("MODELS NOT FOUND - DOWNLOADING FROM GOOGLE DRIVE")
+    print("This is a one-time process (2-3 minutes)...")
+    try:
+        subprocess.run([sys.executable, "download_models.py"], cwd=Path(__file__).parent, check=True)
+        print("=" * 60)
+        print("MODELS READY - STARTING API SERVER")
+        print("=" * 60)
+    except Exception as e:
+        print(f"Error downloading models: {e}")
+        print("Continuing without all models...")
+
 # Import segmentation methods
 from segmentation.classical import (
     otsu_segmentation,
