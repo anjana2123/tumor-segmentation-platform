@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.env.local
+api/venv/
+api/__pycache__/
+api/**/__pycache__/
+api/data/brats/
+*.pyc
+.DS_Store
+api/models/*.pth
+api/models/sam/*.pth
+api/models/*.pkl
+api/models/training_results.json
