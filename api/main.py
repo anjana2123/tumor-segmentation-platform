@@ -79,7 +79,18 @@ METHOD_REGISTRY = {
 }
 
 # BraTS data directory
-BRATS_DATA_DIR = Path(__file__).parent / "data" / "brats" / "BraTS2020_TrainingData" / "MICCAI_BraTS2020_TrainingData"
+'''BRATS_DATA_DIR = Path(__file__).parent / "data" / "brats" / "BraTS2020_TrainingData" / "MICCAI_BraTS2020_TrainingData"'''
+
+FULL_DATASET = Path(__file__).parent / "data" / "brats" / "BraTS2020_TrainingData" / "MICCAI_BraTS2020_TrainingData"
+DEPLOY_DATASET = Path(__file__).parent / "data" / "brats_deploy" / "MICCAI_BraTS2020_TrainingData"
+
+# Use full dataset if available (local), otherwise use deployment dataset (Railway)
+if FULL_DATASET.exists():
+    BRATS_DATA_DIR = FULL_DATASET
+    print(f"Using FULL dataset: {len(list(FULL_DATASET.iterdir()))} cases")
+else:
+    BRATS_DATA_DIR = DEPLOY_DATASET
+    print(f"Using DEPLOYMENT dataset: 20 cases")
 
 def calculate_real_metrics(predicted_mask, ground_truth_mask):
     """
