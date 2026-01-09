@@ -8,6 +8,13 @@ print(f"Using device: {DEVICE}")
 
 MODELS_DIR = Path(__file__).parent.parent / "models"
 
+# Don't load models on import - load them lazily when needed
+SAM_MODEL = None
+MEDSAM_PREDICTOR = None
+SWIN_MODEL = None
+UNETR_MODEL = None
+SEGRESNET_MODEL = None
+
 def calculate_metrics(mask):
     return {
         'diceScore': 0.0,
@@ -17,15 +24,22 @@ def calculate_metrics(mask):
         'processingTime': 0.0
     }
 
-# SAM Model
-try:
-    from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
-    SAM_CHECKPOINT = MODELS_DIR / "sam" / "sam_vit_b.pth"
-    
-    if SAM_CHECKPOINT.exists():
-        # Try loading with PyTorch 2.6 compatibility
-        import torch
-        # Temporarily allow unsafe loading for SAM
+
+def load_sam_models():
+    """Lazy load SAM models"""
+    global SAM_MODEL, MEDSAM_PREDICTOR
+    if SAM_MODEL is not None:
+        return True
+        
+    try:
+        from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
+        SAM_CHECKPOINT = MODELS_DIR / "sam" / "sam_vit_b.pth"
+        
+        if not SAM_CHECKPOINT.exists():
+            print("SAM checkpoint not found")
+            return False
+            
+        # Monkey-patch torch.load for PyTorch 2.6
         original_load = torch.load
         def patched_load(*args, **kwargs):
             kwargs['weights_only'] = False
@@ -40,148 +54,89 @@ try:
         sam_medsam.to(device=DEVICE)
         MEDSAM_PREDICTOR = SamPredictor(sam_medsam)
         
-        # Restore original torch.load
         torch.load = original_load
-        
-        SAM_AVAILABLE = True
         print("SAM and MedSAM models loaded")
-    else:
-        SAM_AVAILABLE = False
-        SAM_MODEL = None
-        MEDSAM_PREDICTOR = None
-        print("SAM checkpoint not found")
-except Exception as e:
-    SAM_AVAILABLE = False
-    SAM_MODEL = None
-    MEDSAM_PREDICTOR = None
-    print(f"SAM not available: {e}")
+        return True
+    except Exception as e:
+        print(f"SAM loading failed: {e}")
+        return False
 
-    
-# SAM Model
-'''try:
-    from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
-    SAM_CHECKPOINT = MODELS_DIR / "sam" / "sam_vit_b.pth"
-    
-    if SAM_CHECKPOINT.exists():
-        sam_base = sam_model_registry["vit_b"](checkpoint=str(SAM_CHECKPOINT))
-        sam_base.to(device=DEVICE)
-        SAM_MODEL = SamAutomaticMaskGenerator(sam_base)
+
+def load_swinunetr():
+    """Lazy load SwinUNETR"""
+    global SWIN_MODEL
+    if SWIN_MODEL is not None:
+        return True
         
-        sam_medsam = sam_model_registry["vit_b"](checkpoint=str(SAM_CHECKPOINT))
-        sam_medsam.to(device=DEVICE)
-        MEDSAM_PREDICTOR = SamPredictor(sam_medsam)
-        
-        SAM_AVAILABLE = True
-        print("SAM and MedSAM models loaded")
-    else:
-        SAM_AVAILABLE = False
-        SAM_MODEL = None
-        MEDSAM_PREDICTOR = None
-        print("SAM checkpoint not found")
-except Exception as e:
-    SAM_AVAILABLE = False
-    SAM_MODEL = None
-    MEDSAM_PREDICTOR = None
-    print(f"SAM not available: {e}")'''
-
-
-# MONAI Models
-try:
-    from monai.networks.nets import SwinUNETR
-    
     try:
-        # Try newer MONAI API
-        swin_model = SwinUNETR(
+        from monai.networks.nets import SwinUNETR
+        SWIN_MODEL = SwinUNETR(
             img_size=(96, 96, 96),
             in_channels=1,
             out_channels=1,
             feature_size=48,
         ).to(DEVICE)
-    except TypeError:
-        # Try older MONAI API
-        swin_model = SwinUNETR(
+        SWIN_MODEL.eval()
+        print("SwinUNETR loaded")
+        return True
+    except Exception as e:
+        print(f"SwinUNETR loading failed: {e}")
+        return False
+
+
+def load_unetr():
+    """Lazy load UNETR"""
+    global UNETR_MODEL
+    if UNETR_MODEL is not None:
+        return True
+        
+    try:
+        from monai.networks.nets import UNETR
+        UNETR_MODEL = UNETR(
             in_channels=1,
             out_channels=1,
-            feature_size=48,
-            spatial_dims=3,
+            img_size=(96, 96, 96),
+            feature_size=16,
+            hidden_size=768,
+            mlp_dim=3072,
+            num_heads=12,
+            norm_name="instance",
+            res_block=True,
         ).to(DEVICE)
-    
-    swin_model.eval()
-    SWIN_MODEL = swin_model
-    SWINUNETR_AVAILABLE = True
-    print("SwinUNETR loaded")
-except Exception as e:
-    SWINUNETR_AVAILABLE = False
-    SWIN_MODEL = None
-    print(f"SwinUNETR not available: {e}")
-    
-'''
-try:
-    from monai.networks.nets import SwinUNETR
-    
-    swin_model = SwinUNETR(
-        img_size=(96, 96, 96),
-        in_channels=1,
-        out_channels=1,
-        feature_size=48,
-    ).to(DEVICE)
-    swin_model.eval()
-    SWIN_MODEL = swin_model
-    SWINUNETR_AVAILABLE = True
-    print("SwinUNETR loaded")
-except Exception as e:
-    SWINUNETR_AVAILABLE = False
-    SWIN_MODEL = None
-    print(f"SwinUNETR not available: {e}")'''
+        UNETR_MODEL.eval()
+        print("UNETR loaded")
+        return True
+    except Exception as e:
+        print(f"UNETR loading failed: {e}")
+        return False
 
 
-try:
-    from monai.networks.nets import UNETR
-    
-    unetr_model = UNETR(
-        in_channels=1,
-        out_channels=1,
-        img_size=(96, 96, 96),
-        feature_size=16,
-        hidden_size=768,
-        mlp_dim=3072,
-        num_heads=12,
-        norm_name="instance",
-        res_block=True,
-    ).to(DEVICE)
-    unetr_model.eval()
-    UNETR_MODEL = unetr_model
-    UNETR_AVAILABLE = True
-    print("UNETR loaded")
-except Exception as e:
-    UNETR_AVAILABLE = False
-    UNETR_MODEL = None
-    print(f"UNETR not available: {e}")
-
-
-try:
-    from monai.networks.nets import SegResNet
-    
-    segresnet_model = SegResNet(
-        blocks_down=[1, 2, 2, 4],
-        blocks_up=[1, 1, 1],
-        init_filters=16,
-        in_channels=1,
-        out_channels=1,
-    ).to(DEVICE)
-    segresnet_model.eval()
-    SEGRESNET_MODEL = segresnet_model
-    SEGRESNET_AVAILABLE = True
-    print("SegResNet loaded")
-except Exception as e:
-    SEGRESNET_AVAILABLE = False
-    SEGRESNET_MODEL = None
-    print(f"SegResNet not available: {e}")
+def load_segresnet():
+    """Lazy load SegResNet"""
+    global SEGRESNET_MODEL
+    if SEGRESNET_MODEL is not None:
+        return True
+        
+    try:
+        from monai.networks.nets import SegResNet
+        SEGRESNET_MODEL = SegResNet(
+            blocks_down=[1, 2, 2, 4],
+            blocks_up=[1, 1, 1],
+            init_filters=16,
+            in_channels=1,
+            out_channels=1,
+        ).to(DEVICE)
+        SEGRESNET_MODEL.eval()
+        print("SegResNet loaded")
+        return True
+    except Exception as e:
+        print(f"SegResNet loading failed: {e}")
+        return False
 
 
 def unet_segmentation(image):
     """SAM - Segment Anything Model"""
-    if not SAM_AVAILABLE or SAM_MODEL is None:
+    if not load_sam_models() or SAM_MODEL is None:
         return np.zeros_like(image), calculate_metrics(np.zeros_like(image))
     
     try:
@@ -211,7 +166,7 @@ def unet_segmentation(image):
 
 def nnunet_segmentation(image):
     """MedSAM - Medical Segment Anything"""
-    if not SAM_AVAILABLE or MEDSAM_PREDICTOR is None:
+    if not load_sam_models() or MEDSAM_PREDICTOR is None:
         return np.zeros_like(image), calculate_metrics(np.zeros_like(image))
     
     try:
@@ -249,7 +204,7 @@ def nnunet_segmentation(image):
 
 def attention_unet_segmentation(image):
     """SwinUNETR - Swin Transformer U-Net"""
-    if not SWINUNETR_AVAILABLE or SWIN_MODEL is None:
+    if not load_swinunetr() or SWIN_MODEL is None:
         return np.zeros_like(image), calculate_metrics(np.zeros_like(image))
     
     try:
@@ -277,7 +232,7 @@ def attention_unet_segmentation(image):
 
 def deeplabv3_segmentation(image):
     """UNETR - Transformer-based U-Net"""
-    if not UNETR_AVAILABLE or UNETR_MODEL is None:
+    if not load_unetr() or UNETR_MODEL is None:
         return np.zeros_like(image), calculate_metrics(np.zeros_like(image))
     
     try:
@@ -305,7 +260,7 @@ def deeplabv3_segmentation(image):
 
 def transunet_segmentation(image):
     """SegResNet - Residual Segmentation Network"""
-    if not SEGRESNET_AVAILABLE or SEGRESNET_MODEL is None:
+    if not load_segresnet() or SEGRESNET_MODEL is None:
         return np.zeros_like(image), calculate_metrics(np.zeros_like(image))
     
     try:
