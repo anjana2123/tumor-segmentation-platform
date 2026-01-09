@@ -8,9 +8,9 @@ pillow
 nibabel
 scikit-image
 scikit-learn
---index-url https://download.pytorch.org/whl/cpu
-torch
-torchvision
 einops
 monai
 git+https://github.com/facebookresearch/segment-anything.git
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
