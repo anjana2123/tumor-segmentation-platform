@@ -17,9 +17,48 @@ def calculate_metrics(mask):
         'processingTime': 0.0
     }
 
-
 # SAM Model
 try:
+    from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
+    SAM_CHECKPOINT = MODELS_DIR / "sam" / "sam_vit_b.pth"
+    
+    if SAM_CHECKPOINT.exists():
+        # Try loading with PyTorch 2.6 compatibility
+        import torch
+        # Temporarily allow unsafe loading for SAM
+        original_load = torch.load
+        def patched_load(*args, **kwargs):
+            kwargs['weights_only'] = False
+            return original_load(*args, **kwargs)
+        torch.load = patched_load
+        
+        sam_base = sam_model_registry["vit_b"](checkpoint=str(SAM_CHECKPOINT))
+        sam_base.to(device=DEVICE)
+        SAM_MODEL = SamAutomaticMaskGenerator(sam_base)
+        
+        sam_medsam = sam_model_registry["vit_b"](checkpoint=str(SAM_CHECKPOINT))
+        sam_medsam.to(device=DEVICE)
+        MEDSAM_PREDICTOR = SamPredictor(sam_medsam)
+        
+        # Restore original torch.load
+        torch.load = original_load
+        
+        SAM_AVAILABLE = True
+        print("SAM and MedSAM models loaded")
+    else:
+        SAM_AVAILABLE = False
+        SAM_MODEL = None
+        MEDSAM_PREDICTOR = None
+        print("SAM checkpoint not found")
+except Exception as e:
+    SAM_AVAILABLE = False
+    SAM_MODEL = None
+    MEDSAM_PREDICTOR = None
+    print(f"SAM not available: {e}")
+
+    
+# SAM Model
+'''try:
     from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
     SAM_CHECKPOINT = MODELS_DIR / "sam" / "sam_vit_b.pth"
     
@@ -43,7 +82,7 @@ except Exception as e:
     SAM_AVAILABLE = False
     SAM_MODEL = None
     MEDSAM_PREDICTOR = None
-    print(f"SAM not available: {e}")
+    print(f"SAM not available: {e}")'''
 
 
 # MONAI Models

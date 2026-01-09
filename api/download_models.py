@@ -9,30 +9,36 @@ SAM_DIR = MODELS_DIR / "sam"
 SAM_DIR.mkdir(exist_ok=True)
 
 def download_from_gdrive(file_id, destination):
-    """Download file from Google Drive."""
+    """Download file from Google Drive with proper handling for large files."""
     if destination.exists():
         print(f"{destination.name} already exists ({destination.stat().st_size / 1024 / 1024:.1f} MB)")
         return True
     
-    print(f"Downloading {destination.name}")
+    print(f"Downloading {destination.name}...")
     
-    URL = "https://drive.google.com/uc?export=download"
+    # Use direct download URL with confirm parameter
+    URL = f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t"
     
     session = requests.Session()
-    response = session.get(URL, params={'id': file_id}, stream=True)
+    response = session.get(URL, stream=True)
     
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            params = {'id': file_id, 'confirm': value}
-            response = session.get(URL, params=params, stream=True)
-    
+    # Save file
     CHUNK_SIZE = 32768
+    total_size = 0
     with open(destination, "wb") as f:
         for chunk in response.iter_content(CHUNK_SIZE):
             if chunk:
                 f.write(chunk)
+                total_size += len(chunk)
     
     size_mb = destination.stat().st_size / 1024 / 1024
+    
+    # Verify it's not HTML (failed download)
+    if size_mb < 0.1:  # Less than 100KB is suspicious for models
+        print(f"✗ Download might have failed for {destination.name} (only {size_mb:.2f} MB)")
+        destination.unlink()  # Delete bad file
+        return False
+    
     print(f"Downloaded {destination.name} ({size_mb:.1f} MB)")
     return True
 
